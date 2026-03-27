@@ -1,0 +1,14 @@
+{
+  "name": "task-category-manager",
+  "version": "1.0.0",
+  "description": "Task & Category Management System - Module 2 SQL Relational Databases",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "pg": "^8.11.3",
+    "dotenv": "^16.4.5",
+    "readline-sync": "^1.4.10"
+  }
+}
