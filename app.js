@@ -2,6 +2,10 @@
  * Task & Category Management System
  * Module 2 - SQL Relational Databases
  * Author: Jhefersson Linares
+ *
+ * A command-line application that manages tasks organized by categories
+ * using a PostgreSQL relational database. Demonstrates full CRUD operations,
+ * JOIN queries, aggregate functions, and date range filtering.
  */
 
 require("dotenv").config();
@@ -21,6 +25,12 @@ const STATUS_OPTIONS  = ["pending", "in_progress", "done"];
 
 // ── Helpers ──────────────────────────────────────────────────
 
+/**
+ * Prints an array of rows as a formatted table in the console.
+ * Automatically calculates column widths based on content.
+ * @param {Array} rows - Array of arrays with row data
+ * @param {Array} headers - Array of column header strings
+ */
 function printTable(rows, headers) {
   if (!rows.length) { console.log("  (no records found)"); return; }
   const widths = headers.map((h, i) =>
@@ -32,6 +42,13 @@ function printTable(rows, headers) {
   rows.forEach(r => console.log(fmt(r)));
 }
 
+/**
+ * Prompts the user to select one value from a list of valid options.
+ * Keeps asking until a valid option is entered.
+ * @param {string} prompt - The question to display
+ * @param {Array} options - Array of valid string options
+ * @returns {string} The selected option
+ */
 function inputChoice(prompt, options) {
   while (true) {
     const val = rl.question(`  ${prompt} `).trim().toLowerCase();
@@ -40,6 +57,14 @@ function inputChoice(prompt, options) {
   }
 }
 
+/**
+ * Prompts the user to enter an integer within a given range.
+ * Keeps asking until a valid integer is entered.
+ * @param {string} prompt - The question to display
+ * @param {number} min - Minimum accepted value
+ * @param {number} max - Maximum accepted value
+ * @returns {number} The validated integer
+ */
 function inputInt(prompt, min, max) {
   while (true) {
     const val = parseInt(rl.question(`  ${prompt} `).trim(), 10);
@@ -48,6 +73,22 @@ function inputInt(prompt, min, max) {
   }
 }
 
+/**
+ * Formats a Date object to a YYYY-MM-DD string.
+ * Returns an empty string if the date is null or undefined.
+ * @param {Date|null} date - The date to format
+ * @returns {string} Formatted date string
+ */
+function formatDate(date) {
+  return date ? date.toISOString().split("T")[0] : "";
+}
+
+/**
+ * Executes a SQL query against the PostgreSQL database.
+ * @param {string} sql - The SQL query string with $1, $2... placeholders
+ * @param {Array} params - Array of parameter values
+ * @returns {Promise<Array>} Array of result rows
+ */
 async function query(sql, params = []) {
   const res = await pool.query(sql, params);
   return res.rows;
@@ -55,6 +96,10 @@ async function query(sql, params = []) {
 
 // ── Categories ────────────────────────────────────────────────
 
+/**
+ * Lists all categories with a count of their associated tasks.
+ * Uses a LEFT JOIN so categories with no tasks are also shown.
+ */
 async function listCategories() {
   const rows = await query(`
     SELECT c.id, c.name, c.description, COUNT(t.id) AS tasks
@@ -66,6 +111,10 @@ async function listCategories() {
     ["ID", "Name", "Description", "Tasks"]);
 }
 
+/**
+ * Prompts the user for a name and description, then inserts a new category.
+ * Displays the new category's ID on success.
+ */
 async function addCategory() {
   const name = rl.question("  Category name: ").trim();
   const desc = rl.question("  Description (optional): ").trim() || null;
@@ -76,6 +125,10 @@ async function addCategory() {
   console.log(`  ✓ Category created with ID ${res[0].id}.`);
 }
 
+/**
+ * Lists categories and prompts the user to select one to delete.
+ * Deletion cascades to all tasks belonging to that category (FK CASCADE).
+ */
 async function deleteCategory() {
   await listCategories();
   const id  = inputInt("Category ID to delete (CASCADE removes its tasks):", 1, 99999);
@@ -86,6 +139,11 @@ async function deleteCategory() {
 
 // ── Tasks ─────────────────────────────────────────────────────
 
+/**
+ * Lists tasks using an INNER JOIN with categories.
+ * Optionally filters by status.
+ * @param {string|null} filterStatus - Status to filter by, or null for all tasks
+ */
 async function listTasks(filterStatus = null) {
   const where  = filterStatus ? "WHERE t.status = $1" : "";
   const params = filterStatus ? [filterStatus] : [];
@@ -97,11 +155,35 @@ async function listTasks(filterStatus = null) {
     ORDER BY t.priority, t.due_date
   `, params);
   printTable(
-    rows.map(r => [r.id, r.title, r.status, PRIORITY_LABEL[r.priority], r.due_date?.toISOString().split("T")[0] ?? "", r.name]),
+    rows.map(r => [r.id, r.title, r.status, PRIORITY_LABEL[r.priority], formatDate(r.due_date), r.name]),
     ["ID", "Title", "Status", "Priority", "Due Date", "Category"]
   );
 }
 
+/**
+ * Filters tasks whose due_date falls within a user-specified date range.
+ * Demonstrates date range filtering with BETWEEN in SQL.
+ */
+async function listTasksByDateRange() {
+  const from = rl.question("  Start date (YYYY-MM-DD): ").trim();
+  const to   = rl.question("  End date   (YYYY-MM-DD): ").trim();
+  const rows = await query(`
+    SELECT t.id, t.title, t.status, t.priority, t.due_date, c.name
+    FROM tasks t
+    INNER JOIN categories c ON t.category_id = c.id
+    WHERE t.due_date BETWEEN $1 AND $2
+    ORDER BY t.due_date
+  `, [from, to]);
+  printTable(
+    rows.map(r => [r.id, r.title, r.status, PRIORITY_LABEL[r.priority], formatDate(r.due_date), r.name]),
+    ["ID", "Title", "Status", "Priority", "Due Date", "Category"]
+  );
+}
+
+/**
+ * Prompts the user for task details and inserts a new task into the database.
+ * Requires a valid category ID (enforced by FK constraint).
+ */
 async function addTask() {
   await listCategories();
   const catId    = inputInt("Category ID:", 1, 99999);
@@ -118,22 +200,29 @@ async function addTask() {
   console.log(`  ✓ Task created with ID ${res[0].id}.`);
 }
 
+/**
+ * Lists tasks and allows the user to update the status, priority,
+ * and due date of a selected task.
+ */
 async function updateTask() {
   await listTasks();
   const id  = inputInt("Task ID to update:", 1, 99999);
   const cur = await query("SELECT title, status, priority, due_date FROM tasks WHERE id = $1", [id]);
   if (!cur.length) { console.log("  Task not found."); return; }
   const t = cur[0];
-  console.log(`  Current → title: ${t.title} | status: ${t.status} | priority: ${PRIORITY_LABEL[t.priority]} | due: ${t.due_date?.toISOString().split("T")[0] ?? ""}`);
+  console.log(`  Current → title: ${t.title} | status: ${t.status} | priority: ${PRIORITY_LABEL[t.priority]} | due: ${formatDate(t.due_date)}`);
   const newStatus   = inputChoice(`New status [${STATUS_OPTIONS.join("/")}]:`, STATUS_OPTIONS);
   const newPriority = inputInt("New priority [1=High, 2=Medium, 3=Low]:", 1, 3);
   const newDue      = rl.question("  New due date (YYYY-MM-DD, leave blank to keep): ").trim()
-                      || t.due_date?.toISOString().split("T")[0] || null;
+                      || formatDate(t.due_date) || null;
   await query("UPDATE tasks SET status=$1, priority=$2, due_date=$3 WHERE id=$4",
     [newStatus, newPriority, newDue, id]);
   console.log("  ✓ Task updated.");
 }
 
+/**
+ * Lists tasks and deletes the one selected by the user.
+ */
 async function deleteTask() {
   await listTasks();
   const id  = inputInt("Task ID to delete:", 1, 99999);
@@ -142,6 +231,11 @@ async function deleteTask() {
   else            console.log("  Task not found.");
 }
 
+/**
+ * Displays a summary report grouped by category.
+ * Uses COUNT and SUM aggregate functions to show total, done,
+ * in_progress, and pending task counts per category.
+ */
 async function summaryReport() {
   const rows = await query(`
     SELECT c.name,
@@ -173,16 +267,22 @@ const MENU = `
 ║  TASKS                               ║
 ║   4. List all tasks                  ║
 ║   5. List tasks by status            ║
-║   6. Add task                        ║
-║   7. Update task                     ║
-║   8. Delete task                     ║
+║   6. List tasks by date range        ║
+║   7. Add task                        ║
+║   8. Update task                     ║
+║   9. Delete task                     ║
 ╠══════════════════════════════════════╣
 ║  REPORTS                             ║
-║   9. Summary report                  ║
+║   10. Summary report                 ║
 ╠══════════════════════════════════════╣
 ║   0. Exit                            ║
 ╚══════════════════════════════════════╝`;
 
+/**
+ * Entry point of the application.
+ * Connects to the database, displays the menu, and routes user input
+ * to the corresponding function in a loop until the user exits.
+ */
 async function main() {
   try {
     await pool.query("SELECT 1");
@@ -193,15 +293,16 @@ async function main() {
   }
 
   const actions = {
-    "1": () => listCategories(),
-    "2": () => addCategory(),
-    "3": () => deleteCategory(),
-    "4": () => listTasks(),
-    "5": () => listTasks(inputChoice("Filter by status [pending/in_progress/done]:", STATUS_OPTIONS)),
-    "6": () => addTask(),
-    "7": () => updateTask(),
-    "8": () => deleteTask(),
-    "9": () => summaryReport(),
+    "1":  () => listCategories(),
+    "2":  () => addCategory(),
+    "3":  () => deleteCategory(),
+    "4":  () => listTasks(),
+    "5":  () => listTasks(inputChoice("Filter by status [pending/in_progress/done]:", STATUS_OPTIONS)),
+    "6":  () => listTasksByDateRange(),
+    "7":  () => addTask(),
+    "8":  () => updateTask(),
+    "9":  () => deleteTask(),
+    "10": () => summaryReport(),
   };
 
   while (true) {

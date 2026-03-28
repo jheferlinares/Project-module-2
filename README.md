@@ -1,111 +1,67 @@
-# Task & Category Management System
-**CSE 310 – Module 2: SQL Relational Databases**  
-Author: Jhefersson Linares
+# Overview
 
----
+As a software engineer focused on backend development, I wanted to deepen my understanding of relational databases by building a real application that interacts with a SQL database. This project allowed me to explore how data relationships, constraints, and queries work in practice — not just in theory.
 
-## Overview
-A command-line application that manages tasks organized by categories using a PostgreSQL relational database. It demonstrates relational schema design, data integrity constraints, and full CRUD operations via SQL.
+I built a Task and Category Management System that connects to a PostgreSQL database and allows users to manage tasks organized by categories through a command-line interface. The application performs full CRUD operations (Create, Read, Update, Delete), executes JOIN queries across two related tables, uses aggregate functions for reporting, and filters tasks by date range — all driven by user input at runtime.
 
----
+To use the program, run `node app.js` in the terminal. A menu will appear with numbered options to list categories, add or delete tasks, filter by status or date range, and view a summary report. All data is persisted in the PostgreSQL database.
 
-## Relational Schema
+My purpose for writing this software was to gain hands-on experience with relational database design, SQL constraints, and how a backend application communicates with a database using parameterized queries to prevent SQL injection.
 
-```
-categories                        tasks
-──────────────────────            ──────────────────────────────────
-id          SERIAL  PK            id          SERIAL  PK
-name        VARCHAR NOT NULL       title       VARCHAR NOT NULL
-            UNIQUE                 description TEXT
-description TEXT                  status      VARCHAR CHECK (pending|in_progress|done)
-created_at  TIMESTAMP             priority    SMALLINT CHECK (1-3)
-                                  due_date    DATE
-                                  category_id INTEGER FK → categories(id)
-                                              ON DELETE CASCADE
-                                  created_at  TIMESTAMP
-```
+[Software Demo Video](https://youtu.be/PqLdwW8AS60)
 
-**Relationship:** One category → Many tasks (1:N)
+# Relational Database
 
----
+I used **PostgreSQL** as the relational database management system.
 
-## Constraints Implemented
-| Constraint      | Where Applied                          |
-|-----------------|----------------------------------------|
-| PRIMARY KEY     | `categories.id`, `tasks.id`            |
-| FOREIGN KEY     | `tasks.category_id → categories.id`    |
-| ON DELETE CASCADE | Deleting a category removes its tasks |
-| NOT NULL        | `categories.name`, `tasks.title`, `tasks.status`, `tasks.priority`, `tasks.category_id` |
-| UNIQUE          | `categories.name`                      |
-| CHECK           | `tasks.status`, `tasks.priority`       |
-| DEFAULT         | `tasks.status = 'pending'`, `tasks.priority = 2` |
+The database is named `taskdb` and contains two related tables:
 
----
+**categories** — stores task categories
+| Column      | Type         | Constraints                  |
+|-------------|--------------|------------------------------|
+| id          | SERIAL       | PRIMARY KEY                  |
+| name        | VARCHAR(100) | NOT NULL, UNIQUE             |
+| description | TEXT         |                              |
+| created_at  | TIMESTAMP    | DEFAULT CURRENT_TIMESTAMP    |
 
-## Setup
+**tasks** — stores individual tasks linked to a category
+| Column      | Type         | Constraints                                      |
+|-------------|--------------|--------------------------------------------------|
+| id          | SERIAL       | PRIMARY KEY                                      |
+| title       | VARCHAR(200) | NOT NULL                                         |
+| description | TEXT         |                                                  |
+| status      | VARCHAR(20)  | NOT NULL, CHECK (pending, in_progress, done)     |
+| priority    | SMALLINT     | NOT NULL, CHECK (1–3), DEFAULT 2                 |
+| due_date    | DATE         |                                                  |
+| category_id | INTEGER      | NOT NULL, FOREIGN KEY → categories(id) ON DELETE CASCADE |
+| created_at  | TIMESTAMP    | DEFAULT CURRENT_TIMESTAMP                        |
 
-### 1. Install PostgreSQL
-Download from https://www.postgresql.org/download/
+The relationship is **One-to-Many**: one category can have many tasks. Deleting a category automatically removes all its tasks via the `ON DELETE CASCADE` constraint.
 
-### 2. Create the database
-```sql
-CREATE DATABASE taskdb;
-```
+# Development Environment
 
-### 3. Run the SQL scripts
-```bash
-psql -U postgres -d taskdb -f schema.sql
-psql -U postgres -d taskdb -f seed.sql
-```
+- **pgAdmin 4** — GUI tool used to create the database and run SQL scripts
+- **Visual Studio Code** — code editor
+- **Node.js v22** — JavaScript runtime environment
+- **npm** — package manager
 
-### 4. Configure credentials
-Edit `.env` with your PostgreSQL credentials:
-```
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=taskdb
-DB_USER=postgres
-DB_PASSWORD=your_password_here
-```
+**Programming Language:** JavaScript (Node.js)
 
-### 5. Install Python dependencies
-```bash
-pip install -r requirements.txt
-```
+**Libraries:**
+- `pg` (node-postgres) — connects Node.js to PostgreSQL and executes queries
+- `dotenv` — loads database credentials from the `.env` file
+- `readline-sync` — handles synchronous user input in the terminal
 
-### 6. Run the application
-```bash
-python app.py
-```
+# Useful Websites
 
----
+- [PostgreSQL Official Documentation](https://www.postgresql.org/docs/)
+- [node-postgres (pg) Documentation](https://node-postgres.com/)
+- [W3Schools SQL Tutorial](https://www.w3schools.com/sql/)
+- [dotenv npm package](https://www.npmjs.com/package/dotenv)
+- [readline-sync npm package](https://www.npmjs.com/package/readline-sync)
 
-## Features
-- **Categories:** list, add, delete (with cascade)
-- **Tasks:** list all, filter by status, add, update, delete
-- **Reports:** summary per category (total / done / in_progress / pending)
-- **Integrity errors** are caught and displayed with clear messages
+# Future Work
 
----
-
-## SQL Concepts Demonstrated
-- DDL: `CREATE TABLE`, `DROP TABLE`, constraints, indexes
-- DML: `INSERT`, `SELECT`, `UPDATE`, `DELETE`
-- Joins: `INNER JOIN`, `LEFT JOIN`
-- Aggregation: `COUNT`, `SUM`, `GROUP BY`
-- Subqueries in `UPDATE`/`DELETE`
-- Cascade deletes via FK constraint
-
----
-
-## File Structure
-```
-Project module 2/
-├── schema.sql        ← DDL: table definitions and constraints
-├── seed.sql          ← Sample data
-├── queries.sql       ← CRUD + JOIN query examples
-├── app.py            ← Python CLI application
-├── requirements.txt  ← Python dependencies
-├── .env              ← Database credentials (not committed)
-└── README.md
-```
+- Add a web-based interface using Express.js so the app can run in a browser
+- Implement user authentication so each user manages their own tasks
+- Add support for task tags and filtering by multiple criteria at once
